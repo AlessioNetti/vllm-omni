@@ -1625,7 +1625,7 @@ async def test_disabled_stage_metrics_are_not_built_or_routed() -> None:
         routed.append(stage_metrics)
 
     orchestrator._route_output = record_route
-    output = SimpleNamespace(request_id="req-no-metrics", error=None, finished=True)
+    output = OmniRequestOutput(request_id="req-no-metrics", finished=True)
 
     await orchestrator._handle_processed_outputs(0, 0, [output])
 
@@ -1639,7 +1639,7 @@ def test_stage_pool_does_not_track_output_timestamps_when_metrics_disabled() -> 
     pool.collect_stage_metrics = False
 
     pool.record_output_timestamps(
-        [SimpleNamespace(request_id="req-no-metrics", outputs=[])],
+        [OmniRequestOutput(request_id="req-no-metrics", outputs=[])],
         output_ts=123.0,
     )
 
