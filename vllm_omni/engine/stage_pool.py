@@ -138,6 +138,7 @@ class StagePool:
         self.clients: list[StagePoolClient | None] = list(normalized_clients)
         self._output_processor = output_processor
         self._stage_vllm_config = stage_vllm_config
+        self.collect_stage_metrics = True
         self._has_chunk_transfer_adapter = bool(
             getattr(getattr(stage_vllm_config, "model_config", None), "async_chunk", False)
         )
@@ -965,6 +966,8 @@ class StagePool:
 
     def record_output_timestamps(self, request_outputs: list[Any], *, output_ts: float | None = None) -> None:
         """Record all output timestamps and the first non-empty output timestamp."""
+        if not self.collect_stage_metrics:
+            return
         output_ts = _time.time() if output_ts is None else output_ts
         for request_output in request_outputs:
             request_id = getattr(request_output, "request_id", None)

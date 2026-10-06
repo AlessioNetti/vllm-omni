@@ -181,6 +181,7 @@ class OmniBase(PDDisaggregationMixin):
         stage_init_timeout = kwargs.pop("stage_init_timeout", 300)
         init_timeout = kwargs.pop("init_timeout", 600)
         log_stats = kwargs.pop("log_stats", False)
+        collect_stage_metrics = kwargs.pop("collect_stage_metrics", True)
         self._enable_ar_profiler = kwargs.pop("enable_ar_profiler", False)
         # NOTE: read-only lookup — must NOT pop. Popping here drops the key
         # before it reaches ``StageConfigFactory._create_legacy_from_registry``, so
@@ -198,6 +199,7 @@ class OmniBase(PDDisaggregationMixin):
         self.__dict__["_name"] = self.__class__.__name__
         self.model = model
         self.log_stats = log_stats
+        self.collect_stage_metrics = collect_stage_metrics
         # Provisional value (mirrors the CLI/caller kwarg); the engine resolves
         # pipeline + deploy YAML + CLI precedence below and the final value is
         # re-assigned from ``self.engine.async_chunk`` after init.
@@ -219,6 +221,7 @@ class OmniBase(PDDisaggregationMixin):
             transfer_emitter=self.transfer_metrics,
             prom_metrics=self.prom_metrics,
             log_stats=log_stats,
+            collect_stage_metrics=collect_stage_metrics,
             **kwargs,
         )
         self._shutdown_called = False
