@@ -141,9 +141,11 @@ A reverse map `(stage_id, replica_id) -> flat_idx` is maintained on the Orchestr
 
 > Dynamic add/remove of replicas at runtime is intentionally out of scope — the upstream `PrometheusStatLogger` materializes per-engine_idx child metrics at init time, and supporting hot-add would require non-trivial intervention into upstream's per-family child dictionaries.
 
-## Gating: `--log-stats`
+## Gating: `--log-stats` and `--collect-stage-metrics`
 
-All metrics — both the omni-specific `vllm_omni:*` families and the upstream `vllm:*` wrap families — are gated by the user's `--log-stats` CLI flag (default off). The flag is plumbed from `OmniBase.__init__(log_stats=...)` through `AsyncOmniEngine` to the stage-spawn helpers and to the three Prometheus metric classes (`OmniPrometheusMetrics` / `OmniModalityMetrics` / `OmniTransferMetrics`), and is forwarded to `Orchestrator._init_metrics_state(...)`.
+Prometheus emission and upstream engine statistics are gated by the user's `--log-stats` CLI flag (default off). The flag is plumbed from `OmniBase.__init__(log_stats=...)` through `OmniEngineBase` to the stage-spawn helpers and to the three Prometheus metric classes (`OmniPrometheusMetrics` / `OmniModalityMetrics` / `OmniTransferMetrics`), and is forwarded to `Orchestrator._init_metrics_state(...)`.
+
+Per-request `StageRequestStats` construction is controlled separately by `--collect-stage-metrics`, which defaults to on for backward compatibility. Disabling it skips per-output timestamp/audio bookkeeping, terminal stage-metric construction, and response-level stage snapshots. Because `--log-stats` consumes these snapshots for omni-specific metrics, `--log-stats --no-collect-stage-metrics` is rejected as an invalid configuration.
 
 Behavior with `--log-stats=off` (default):
 
