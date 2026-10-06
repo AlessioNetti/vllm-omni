@@ -1598,6 +1598,68 @@ async def test_resumable_segment_boundary_builds_stage_metrics() -> None:
     assert routed == [built_metrics]
 
 
+@pytest.mark.asyncio
+async def test_disabled_stage_metrics_are_not_built_or_routed() -> None:
+    class RecordingPool:
+        def __init__(self) -> None:
+            self.calls: list[list[Any]] = []
+
+        def build_stage_metrics(self, outputs, **_kwargs):
+            self.calls.append(outputs)
+            return object()
+
+    pool = RecordingPool()
+    orchestrator = object.__new__(Orchestrator)
+    orchestrator.collect_stage_metrics = False
+    req_state = OrchestratorRequestState(
+        request_id="req-no-metrics",
+        sampling_params_list=[_sampling_params()],
+        final_stage_id=0,
+    )
+    req_state.stage_submit_ts[0] = time.time()
+    orchestrator.request_states = {"req-no-metrics": req_state}
+    orchestrator.stage_pools = [pool]
+    routed: list[Any] = []
+
+    async def record_route(_stage_id, _replica_id, _output, _req_state, stage_metrics):
+        routed.append(stage_metrics)
+
+    orchestrator._route_output = record_route
+    output = SimpleNamespace(request_id="req-no-metrics", error=None, finished=True)
+
+    await orchestrator._handle_processed_outputs(0, 0, [output])
+
+    assert pool.calls == []
+    assert routed == [None]
+
+
+def test_stage_pool_does_not_track_output_timestamps_when_metrics_disabled() -> None:
+    stage = FakeStageClient(stage_type="llm", final_output=True)
+    pool = StagePool(0, [stage])
+    pool.collect_stage_metrics = False
+
+    pool.record_output_timestamps(
+        [SimpleNamespace(request_id="req-no-metrics", outputs=[])],
+        output_ts=123.0,
+    )
+
+    assert pool._output_timestamps_by_request == {}
+    assert pool._non_empty_first_output_timestamps_by_request == {}
+    assert pool._audio_frames_by_request == {}
+
+
+def test_orchestrator_rejects_logging_without_stage_metrics() -> None:
+    with pytest.raises(ValueError, match="log_stats=True requires collect_stage_metrics=True"):
+        Orchestrator(
+            request_async_queue=None,
+            output_async_queue=None,
+            rpc_async_queue=None,
+            stage_pools=[],
+            log_stats=True,
+            collect_stage_metrics=False,
+        )
+
+
 def test_stage_pool_metrics_use_resumable_segment_token_count() -> None:
     class SegmentMetricsOutputProcessor(FakeOutputProcessor):
         def pop_native_text_metrics(self, request_id: str) -> dict[str, Any]:

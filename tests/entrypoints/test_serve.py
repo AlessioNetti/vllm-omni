@@ -107,6 +107,13 @@ def _parse_serve_args(argv: list[str]) -> TrackingNamespace:
     return parser.parse_args(argv)
 
 
+def test_serve_rejects_log_stats_without_stage_metrics() -> None:
+    args = _parse_serve_args(["serve", "fake-model", "--omni", "--log-stats", "--no-collect-stage-metrics"])
+
+    with pytest.raises(ValueError, match="--log-stats requires --collect-stage-metrics"):
+        OmniServeCommand().validate(args)
+
+
 def test_no_guardrails_is_only_forwarded_as_model_config(mocker: MockerFixture) -> None:
     """The CLI alias must not reach the strict diffusion config validator."""
     parser = TrackingArgumentParser()
