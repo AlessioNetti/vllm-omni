@@ -744,7 +744,9 @@ class OmniBase(PDDisaggregationMixin):
                 evt_output_type = evt_stage_meta.final_output_type
             stage_name = evt_stage_meta.model_stage
             sid_key = str(sid)
-            stage_metrics[sid_key] = OrchestratorAggregator._merge_stage_metric_event(stage_metrics.get(sid_key), evt)
+            stage_metrics[sid_key] = OrchestratorAggregator._merge_stage_metric_event(
+                stage_metrics.get(sid_key), evt, collect_stage_metrics=self.collect_stage_metrics
+            )
             stage_metrics[sid_key]["stage_name"] = stage_name or f"stage_{sid}"
             stage_metrics[sid_key]["final_output_type"] = evt_output_type
         if stage_metrics:

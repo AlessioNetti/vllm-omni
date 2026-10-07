@@ -468,8 +468,9 @@ class OmniServeCommand(CLISubcommand):
             action=argparse.BooleanOptionalAction,
             default=True,
             help=(
-                "Build and route per-request stage metrics. Enabled by default; "
-                "use --no-collect-stage-metrics to remove their latency overhead."
+                "Collect per-request stage diagnostics. Enabled by default; "
+                "use --no-collect-stage-metrics with --disable-log-stats to skip diagnostics "
+                "while preserving completion and usage metadata."
             ),
         )
         omni_config_group.add_argument(
