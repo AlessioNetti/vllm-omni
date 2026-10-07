@@ -17,7 +17,7 @@ import janus
 import pytest
 from vllm.outputs import CompletionOutput, RequestOutput
 from vllm.sampling_params import SamplingParams
-from vllm.v1.engine import EngineCoreOutput, EngineCoreOutputs, FinishReason
+from vllm.v1.engine import EngineCoreOutput, EngineCoreOutputs, EngineCoreRequest, FinishReason
 from vllm.v1.engine.exceptions import EngineDeadError
 from vllm.v1.metrics.stats import IterationStats
 
@@ -1646,6 +1646,67 @@ async def test_disabled_stage_metrics_preserve_completion_routing() -> None:
     assert pool.calls == [[output]]
     assert routed == [built_metrics]
     assert built_metrics.pipeline_timings is None
+
+
+@pytest.mark.asyncio
+async def test_disabled_stage_metrics_drain_native_cache_on_completion(mocker) -> None:
+    processor = MultimodalOutputProcessor(tokenizer=None, log_stats=False)
+    pool = StagePool(0, [FakeStageClient(stage_type="llm", final_output=True)], output_processor=processor)
+    orchestrator = Orchestrator(
+        request_async_queue=asyncio.Queue(),
+        output_async_queue=asyncio.Queue(),
+        rpc_async_queue=asyncio.Queue(),
+        stage_pools=[pool],
+        log_stats=False,
+        collect_stage_metrics=False,
+    )
+    route_output = mocker.patch.object(orchestrator, "_route_output", new_callable=mocker.AsyncMock)
+    params = SamplingParams(max_tokens=10, detokenize=False)
+
+    for count in range(1, 6):
+        request_id = f"req-no-metrics-{count}"
+        processor.add_request(
+            EngineCoreRequest(
+                request_id=request_id,
+                external_req_id=request_id,
+                prompt_token_ids=[1],
+                mm_features=None,
+                sampling_params=params,
+                pooling_params=None,
+                arrival_time=time.time(),
+                lora_request=None,
+                cache_salt=None,
+                data_parallel_rank=None,
+            ),
+            prompt=None,
+        )
+        req_state = OrchestratorRequestState(
+            request_id=request_id,
+            sampling_params_list=[params],
+            final_stage_id=0,
+        )
+        req_state.stage_submit_ts[0] = time.time()
+        orchestrator.request_states[request_id] = req_state
+        outputs = processor.process_outputs(
+            [
+                OmniEngineCoreOutput(
+                    request_id=request_id,
+                    new_token_ids=[42],
+                    num_generation_tokens=count,
+                    finish_reason=FinishReason.STOP,
+                )
+            ]
+        ).request_outputs
+        assert len(outputs) == 1
+        assert outputs[0].finished
+        assert processor._native_text_metrics_by_request[request_id]["num_generation_tokens"] == count
+
+        await orchestrator._handle_processed_outputs(0, 0, outputs)
+
+        assert processor._native_text_metrics_by_request == {}
+        assert route_output.call_args.args[-1].num_tokens_out == count
+
+    assert route_output.await_count == 5
 
 
 def test_disabled_stage_metrics_preserve_native_usage_and_finish_reason(mocker) -> None:
