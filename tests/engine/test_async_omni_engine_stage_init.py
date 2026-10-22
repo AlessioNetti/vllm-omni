@@ -61,6 +61,43 @@ class _FakeStageConfig:
     runtime: _FakeRuntimeConfig
 
 
+@pytest.mark.parametrize("value,expected", [(None, 256), ("1", 1), ("1024", 1024)])
+def test_request_queue_capacity_from_environment(monkeypatch, value, expected):
+    if value is None:
+        monkeypatch.delenv("VLLM_OMNI_REQUEST_QUEUE_MAXSIZE", raising=False)
+    else:
+        monkeypatch.setenv("VLLM_OMNI_REQUEST_QUEUE_MAXSIZE", value)
+    engine = object.__new__(AsyncOmniEngine)
+    monkeypatch.setattr(async_omni_engine_module.StageConfigFactory, "get_pipeline_config", lambda *a, **k: None)
+    monkeypatch.setattr(engine, "_resolve_stage_configs", lambda *a, **k: (None, []))
+    monkeypatch.setattr(engine, "_set_pipeline_runtime_config", lambda *a: None)
+    capacities: list[int] = []
+
+    class QueueCreatedError(Exception):
+        pass
+
+    def stop_at_queue(*, maxsize):
+        capacities.append(maxsize)
+        raise QueueCreatedError
+
+    monkeypatch.setattr(async_omni_engine_module.janus, "Queue", stop_at_queue)
+    with pytest.raises(QueueCreatedError):
+        engine.__init__("test-model")
+    assert capacities == [expected]
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "abc", "1.5", "", "nan"])
+def test_invalid_request_queue_capacity_fails_before_model_resolution(monkeypatch, value):
+    monkeypatch.setenv("VLLM_OMNI_REQUEST_QUEUE_MAXSIZE", value)
+
+    def unexpected_model_resolution(*args, **kwargs):
+        pytest.fail("Invalid queue capacity must fail before resolving the model")
+
+    monkeypatch.setattr(async_omni_engine_module.StageConfigFactory, "get_pipeline_config", unexpected_model_resolution)
+    with pytest.raises(ValueError, match="VLLM_OMNI_REQUEST_QUEUE_MAXSIZE must be a positive integer"):
+        AsyncOmniEngine("test-model")
+
+
 def test_stage_runtime_env_accepts_typed_runtime_config(monkeypatch):
     env_key = "VLLM_OMNI_TEST_TYPED_STAGE_ENV"
     monkeypatch.delenv(env_key, raising=False)

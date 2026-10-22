@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import os
 import queue
 import threading
 import time
@@ -70,7 +71,6 @@ from vllm_omni.metrics.prometheus import OmniRequestCounter
 logger = init_logger(__name__)
 
 _STARTUP_POLL_INTERVAL_S = 1.0
-_REQUEST_QUEUE_MAXSIZE = 256
 # Output messages one serving-loop wakeup takes before yielding the event loop.
 _OUTPUT_DRAIN_MAX_BATCH = 256
 _ConfigResolutionResult = OmniConfigResolution | tuple[str | None, list[Any], str | None]
@@ -141,6 +141,14 @@ class OmniEngineBase:
         client_config: OmniClientConfig | None = None,
         **kwargs: Any,
     ) -> None:
+        queue_size = os.environ.get("VLLM_OMNI_REQUEST_QUEUE_MAXSIZE", "256")
+        try:
+            request_queue_maxsize = int(queue_size)
+        except ValueError as exc:
+            raise ValueError("VLLM_OMNI_REQUEST_QUEUE_MAXSIZE must be a positive integer") from exc
+        if request_queue_maxsize <= 0:
+            raise ValueError("VLLM_OMNI_REQUEST_QUEUE_MAXSIZE must be a positive integer")
+
         self.model = model
         self.tokenizer = tokenizer
         # Cached by get_diffusion_od_config().
@@ -303,7 +311,7 @@ class OmniEngineBase:
         # sees a non-None ``self.request_queue`` when on_register fires.
         # ``async_q`` lazily binds to whatever event loop first awaits on
         # it (the orchestrator loop), so cross-thread use stays correct.
-        self.request_queue: janus.Queue[EngineQueueMessage] = janus.Queue(maxsize=_REQUEST_QUEUE_MAXSIZE)
+        self.request_queue: janus.Queue[EngineQueueMessage] = janus.Queue(maxsize=request_queue_maxsize)
         self.output_queue: janus.Queue[EngineQueueMessage] = janus.Queue()
         self._output_sink = OutputQueueSink(self.output_queue.sync_q)
         self.rpc_output_queue: janus.Queue[EngineQueueMessage] = janus.Queue()

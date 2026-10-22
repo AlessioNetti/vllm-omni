@@ -89,6 +89,7 @@ environment variables.
 
 | Name | Type and default | Applies to and read time | Precedence and invalid values | Lifecycle |
 | --- | --- | --- | --- | --- |
+| `VLLM_OMNI_REQUEST_QUEUE_MAXSIZE` | Positive integer; default `256` messages | Shared caller-to-orchestrator request queue in turn-based and duplex engines; read at engine construction | Environment-only setting. Non-integers, zero and negative values raise `ValueError` before startup. Larger values allow more queued requests or session commands before producers wait for capacity; they do not increase processing throughput. | Experimental operational control |
 | `SPEAKER_SAMPLES_DIR` | Filesystem path; default `~/.cache/vllm-omni/speakers` | Speech server; read when speaker storage initializes | Environment-only setting. The directory is created; filesystem errors propagate. | Stable |
 | `SPEAKER_MAX_UPLOADED` | Integer; default `1000` | Speech server; read when speaker storage initializes | Environment-only setting. A non-integer logs a warning and uses `1000`; range is not otherwise validated. | Stable |
 | `VLLM_OMNI_ABORT_TIMEOUT` | Float seconds; default `2` | Engine abort wait for Videos DELETE and `generate()` cancel/error cleanup; read when `async_omni` imports | Environment-only setting. A non-float raises `ValueError` during import. | Experimental |
